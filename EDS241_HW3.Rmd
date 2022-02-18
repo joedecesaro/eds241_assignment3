@@ -104,13 +104,107 @@ model2 <- lm_robust(formula = birthwgt ~ tobacco + mage + meduc + mblack + alcoh
 
 The estimated coefficient on tobacco is `r round(model2$coefficients[2], 2)` and the standard error is `r round(model2$std.error[2], 2)`.yt
 
-## (c) Use the exact matching estimator to estimate the effect of maternal smoking on birth weight. For simplicity, consider the following covariates in your matching estimator: create a 0-1 indicator for mother's age (=1 if mage\>=34), and a 0-1 indicator for mother's education (1 if meduc\>=16), mother's race (mblack), and alcohol consumption indicator (alcohol). These 4 covariates will create 2*2*2\*2 = 16 cells. Report the estimated average treatment effect of smoking on birthweight using the exact matching estimator and its linear regression analogue (Lecture 6, slides 12-14).
+## (c) Use the exact matching estimator to estimate the effect of maternal smoking on birth weight. For simplicity, consider the following covariates in your matching estimator: create a 0-1 indicator for mother's age (=1 if mage\>=34), and a 0-1 indicator for mother's education (1 if meduc\>=16), mother's race (mblack), and alcohol consumption indicator (alcohol). These 4 covariates will create 2*2*2*2 = 16 cells. Report the estimated average treatment effect of smoking on birthweight using the exact matching estimator and its linear regression analogue (Lecture 6, slides 12-14).
+```{r}
+# produce indicators
+c_data <- birth_data %>% 
+  select("tobacco",
+         "alcohol",
+         "mblack",
+         "mage",
+         "meduc",
+         "birthwgt") %>% 
+  mutate(mage_d = ifelse(mage >= 34, 1, 0),
+         meduc_d = ifelse(meduc >= 16, 1, 0))
 
-Create indicators
+# make group variables
+c_data <- c_data %>% 
+  select("tobacco",
+         "alcohol",
+         "mblack",
+         "mage_d",
+         "meduc_d",
+         "birthwgt") %>% 
+  mutate(g = paste0(alcohol, 
+                    mblack, 
+                    mage_d,
+                    meduc_d))
+
+# make the model
+model3 <- lm_robust(formula = birthwgt ~ tobacco + as.factor(g), 
+                    data = c_data)
+
+# huxreg("birthweight(g)" = model3)
+```
+
+```{r}
+# Report the estimated average treatment effect of smoking on birthweight using the exact matching estimator and its linear regression analogue (Lecture 6, slides 12-14).
+ATE_table <- c_data %>%
+  group_by(g, tobacco)%>% 
+  # calculate number of observations
+  summarise(n_obs = n(),
+            # calculate birthwgt mean by X by treatment cells
+            birthwgt_mean= mean(birthwgt, na.rm = T))%>% 
+  # Reshape dataframe
+  gather(variables, values, n_obs:birthwgt_mean)%>% 
+  # Combine the treatment and variables for reshaping
+  mutate(variables = paste0(variables,"_", tobacco, sep=""))%>%
+  # Reshape data by treatment and X cell
+  pivot_wider(id_cols = g, names_from = variables,values_from = values)%>% 
+  # Ungroup from X values
+  ungroup()%>% 
+  # calculate birthwgt_diff
+  mutate(birthwgt_diff = birthwgt_mean_1 - birthwgt_mean_0, 
+         w_ATE = (n_obs_0+n_obs_1)/(sum(n_obs_0)+sum(n_obs_1)),
+         # calculate weights
+         w_ATT = n_obs_1/sum(n_obs_1))%>% 
+  # Round data
+  mutate_if(is.numeric, round, 2) 
+
+huxtable(ATE_table)
+```
+
+
+```{r}
+# Exact matching estimator ATE
+ATE=sum((ATE_table$w_ATE)*(ATE_table$birthwgt_diff))
+ATE
+
+```
+
+Using the linear regression analogue, the average effect of a mother smoking on birth weight is a decrease of `r abs(round(model3[[1]][[2]], 2))` grams. The average effect of a mother smoking on birth weight is a decrease of `r round(abs(ATE), 2)` grams using the the exact matching estimator.
 
 ## (d) Estimate the propensity score for maternal smoking using a logit estimator and based on the following specification: mother's age, mother's age squared, mother's education, and indicators for mother's race, and alcohol consumption.
 
-Interpret the signs Age is the only one that is quadratic (squared) because it is only of the only things that you can
+```{r}
+# make mage^2
+data_propensity <- birth_data %>% 
+  mutate(mage_sq = mage * mage)
+
+# Estimate propensity score and predict (EPS)
+ps_model1 <- glm(tobacco ~ mage + mage_sq + meduc + mblack + alcohol, 
+                 family = binomial(),
+                 data = data_propensity)
+# summary(ps_model1)
+
+# Make new response variable
+EPS <- predict(ps_model1, type = "response")
+
+# Propensity score
+PS_WGT <- (data_propensity$tobacco/EPS) + 
+  ((1 - data_propensity$tobacco) / (1-EPS))
+```
+
+```{r}
+# Use propensity score to weighted regression (WLS) to estimate maternal smoking effect on birth weight.
+wls <- lm(data = data_propensity,
+           birthwgt ~ tobacco + mage + mage_sq + meduc + mblack + alcohol,
+           weights = PS_WGT)
+
+huxreg("Birth Weight" = wls)
+```
+
+Using the propensity score, the estimated effect of a mother smoking on birth weight is a decrease of `r round(abs(wls[[1]][[2]]), 2)`.
 
 ## (e) Use the propensity score weighted regression (WLS) to estimate the effect of maternal smoking on birth weight (Lecture 7, slide 12).
 
