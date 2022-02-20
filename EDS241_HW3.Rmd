@@ -90,7 +90,8 @@ model1.1 <- lm_robust(formula = tobacco ~ meduc, data = birth_data)
 huxreg(model1.1)
 ```
 
-From the model1.1, where we regress tobacco on mother's education, there is a decrease in likelihood of smoking for every year increase that is statistically significant and therefore there is an effect of years of education on likelihood of smoking. This means that the assumption that smoking is randomly assigned is incorrect because of this correlation.
+\noindent From the model1.1, where we regress tobacco on mother's education, there is a decrease in likelihood of smoking for every year increase that is statistically significant and therefore there is an effect of years of education on likelihood of smoking. This means that the assumption that smoking is randomly assigned is incorrect because of this correlation.
+\newpage
 
 ## (b) Assume that maternal smoking is randomly assigned conditional on the observable covariates listed above. Estimate the effect of maternal smoking on birth weight using a linear regression. Report the estimated coefficient on tobacco and its standard error.
 
@@ -198,6 +199,7 @@ EPS <- predict(ps_model1, type = "response")
 # Propensity score
 PS_WGT <- (data_propensity$tobacco/EPS) + 
   ((1 - data_propensity$tobacco) / (1-EPS))
+# PS_WGT
 ```
 
 ## (e) Use the propensity score weighted regression (WLS) to estimate the effect of maternal smoking on birth weight (Lecture 7, slide 12).
